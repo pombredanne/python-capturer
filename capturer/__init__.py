@@ -1,7 +1,7 @@
 # Easily capture stdout/stderr of the current process and subprocesses.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: November 12, 2016
+# Last Change: May 17, 2017
 # URL: https://capturer.readthedocs.io
 
 """Easily capture stdout/stderr of the current process and subprocesses."""
@@ -21,7 +21,7 @@ from humanfriendly.text import compact, dedent
 from humanfriendly.terminal import clean_terminal_output
 
 # Semi-standard module versioning.
-__version__ = '2.3'
+__version__ = '2.4'
 
 interpret_carriage_returns = clean_terminal_output
 """
@@ -84,7 +84,7 @@ def enable_old_api():
 
 def create_proxy_method(name):
     """
-    Helper for :func:`enable_old_api()` to create proxy methods.
+    Create a proxy method for use by :func:`enable_old_api()`.
 
     :param name: The name of the :class:`PseudoTerminal` method to call when
                  the proxy method is called.
@@ -196,7 +196,8 @@ class CaptureOutput(MultiProcessHelper):
     """Context manager to capture the standard output and error streams."""
 
     def __init__(self, merged=True, encoding=DEFAULT_TEXT_ENCODING,
-                 termination_delay=TERMINATION_DELAY, chunk_size=1024):
+                 termination_delay=TERMINATION_DELAY, chunk_size=1024,
+                 relay=True):
         """
         Initialize a :class:`CaptureOutput` object.
 
@@ -217,6 +218,10 @@ class CaptureOutput(MultiProcessHelper):
         :param chunk_size: The maximum number of bytes to read from the
                            captured streams on each call to :func:`os.read()`
                            (an integer).
+        :param relay: If this is :data:`True` (the default) then captured
+                      output is relayed to the terminal or parent process,
+                      if it's :data:`False` the captured output is hidden
+                      (swallowed).
         """
         # Initialize the superclass.
         super(CaptureOutput, self).__init__()
@@ -224,6 +229,7 @@ class CaptureOutput(MultiProcessHelper):
         self.chunk_size = chunk_size
         self.encoding = encoding
         self.merged = merged
+        self.relay = relay
         self.termination_delay = termination_delay
         # Initialize instance variables.
         self.pseudo_terminals = []
@@ -299,14 +305,20 @@ class CaptureOutput(MultiProcessHelper):
         if self.is_capturing:
             raise TypeError("Output capturing is already enabled!")
         if self.merged:
-            # Capture and relay stdout/stderr as one stream.
-            self.output = self.allocate_pty(relay_fd=self.stderr_stream.original_fd)
+            # Capture (and most likely relay) stdout/stderr as one stream.
+            fd = self.stderr_stream.original_fd if self.relay else None
+            self.output = self.allocate_pty(relay_fd=fd)
             for kind, stream in self.streams:
                 self.output.attach(stream)
         else:
-            # Capture and relay stdout/stderr as separate streams.
-            self.output_queue = multiprocessing.Queue()
-            self.start_child(self.merge_loop)
+            # Capture (and most likely relay) stdout/stderr as separate streams.
+            if self.relay:
+                # Start the subprocess to relay output.
+                self.output_queue = multiprocessing.Queue()
+                self.start_child(self.merge_loop)
+            else:
+                # Disable relaying of output.
+                self.output_queue = None
             self.stdout = self.allocate_pty(output_queue=self.output_queue, queue_token=STDOUT_FD)
             self.stderr = self.allocate_pty(output_queue=self.output_queue, queue_token=STDERR_FD)
             for kind, stream in self.streams:
@@ -350,11 +362,12 @@ class CaptureOutput(MultiProcessHelper):
 
     def merge_loop(self, started_event):
         """
-        Internal method used to merge and relay output in a child process.
+        Merge and relay output in a child process.
 
-        This method is used when standard output and standard error are being
-        captured separately. It's responsible for emitting each captured line
-        on the appropriate stream without interleaving text within lines.
+        This internal method is used when standard output and standard error
+        are being captured separately. It's responsible for emitting each
+        captured line on the appropriate stream without interleaving text
+        within lines.
         """
         buffers = {
             STDOUT_FD: OutputBuffer(self.stdout_stream.original_fd),
@@ -403,6 +416,7 @@ class OutputBuffer(object):
     def flush(self):
         """Flush any remaining buffered output to the stream."""
         os.write(self.fd, self.buffer)
+        self.buffer = b''
 
 
 class PseudoTerminal(MultiProcessHelper):

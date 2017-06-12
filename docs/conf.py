@@ -1,7 +1,7 @@
 # Easily capture stdout/stderr of the current process and subprocesses.
 #
 # Author: Peter Odding <peter@peterodding.com>
-# Last Change: November 12, 2016
+# Last Change: May 17, 2017
 # URL: https://capturer.readthedocs.io
 
 """Sphinx documentation configuration for the `capturer` project."""
@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.abspath('..'))
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.intersphinx',
+    'sphinx.ext.viewcode',
     'humanfriendly.sphinx',
 ]
 
@@ -32,7 +33,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'capturer'
-copyright = u'2016, Peter Odding'
+copyright = u'2017, Peter Odding'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -75,7 +76,7 @@ intersphinx_mapping = dict(
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-html_theme = 'classic'
+html_theme = 'nature'
 
 # Output file base name for HTML help builder.
 htmlhelp_basename = 'capturerdoc'
